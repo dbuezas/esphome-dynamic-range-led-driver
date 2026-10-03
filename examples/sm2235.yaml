@@ -1,0 +1,53 @@
+# Minimal sm2235 bulb with dynamic_range. Adjust pins, channels and
+# currents to your bulb.
+esphome:
+  name: sm2235-bulb
+
+esp8266:
+  board: esp01_1m
+
+external_components:
+  - source: github://dbuezas/esphome-dynamic-range-led-driver
+
+sm2235:
+  data_pin: GPIO4
+  clock_pin: GPIO5
+  max_power_color_channels: 3
+  max_power_white_channels: 5
+
+output:
+  # The chip's own channels, as usual.
+  - {platform: sm2235, id: red_raw, channel: 0}
+  - {platform: sm2235, id: green_raw, channel: 1}
+  - {platform: sm2235, id: blue_raw, channel: 2}
+  - {platform: sm2235, id: cold_raw, channel: 3}
+  - {platform: sm2235, id: warm_raw, channel: 4}
+  # One dynamic_range output per channel. The light uses these.
+  - {platform: dynamic_range, id: red, output: red_raw}
+  - {platform: dynamic_range, id: green, output: green_raw}
+  - {platform: dynamic_range, id: blue, output: blue_raw}
+  - {platform: dynamic_range, id: cold, output: cold_raw}
+  - {platform: dynamic_range, id: warm, output: warm_raw}
+
+light:
+  - platform: rgbww
+    name: Bulb
+    red: red
+    green: green
+    blue: blue
+    cold_white: cold
+    warm_white: warm
+    cold_white_color_temperature: 153 mireds
+    warm_white_color_temperature: 500 mireds
+    color_interlock: true
+
+# Optional: switch dynamic range off and on, to compare.
+switch:
+  - platform: template
+    name: Dynamic range
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    turn_on_action:
+      - lambda: dynamic_range::set_enabled(true);
+    turn_off_action:
+      - lambda: dynamic_range::set_enabled(false);

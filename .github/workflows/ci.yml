@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"  # weekly, to catch ESPHome changes
+
+jobs:
+  host-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: tests/run.sh
+
+  compile:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        chip: [bp5758d, bp1658cj, sm2235, sm2335, sm2135]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install esphome
+      # Build against this checkout, not the published version.
+      - run: |
+          sed "s#github://dbuezas/esphome-dynamic-range-led-driver#{type: local, path: $PWD/components}#" \
+            examples/${{ matrix.chip }}.yaml > test.yaml
+          esphome compile test.yaml
