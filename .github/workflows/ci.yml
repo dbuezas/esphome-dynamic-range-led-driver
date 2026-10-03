@@ -30,3 +30,13 @@ jobs:
           sed "s#github://dbuezas/esphome-dynamic-range-led-driver#{type: local, path: $PWD/components}#" \
             examples/${{ matrix.chip }}.yaml > test.yaml
           esphome compile test.yaml
+      # ESPHome reserves a fixed number of component slots and silently drops
+      # any component past it. Every dynamic_range group must have a slot, or
+      # its loop never runs and the current never walks.
+      - name: Every component has a slot
+        run: |
+          dir=$(ls -d .esphome/build/*/)
+          slots=$(sed -n 's/#define ESPHOME_COMPONENT_COUNT //p' $dir/src/esphome/core/defines.h)
+          used=$(grep -c 'App.register_component_(' $dir/src/main.cpp)
+          echo "slots $slots, components $used"
+          test "$used" -le "$slots"

@@ -91,9 +91,19 @@ def _resolve(full_config, inner_id):
     return platform, inner, hub, f"{hub_id.id}_{_group_of(inner[CONF_CHANNEL])}"
 
 
+def _group_id(key):
+    return f"dynamic_range_{key}"
+
+
 def _final_validate(config):
     full = fv.full_config.get()
     platform, inner, hub, group = _resolve(full, config[CONF_OUTPUT])
+
+    # Each current group is a component (for its loop). ESPHome sizes its
+    # component list from CORE.component_ids before any to_code runs, so the
+    # group must be counted here, during validation. Counted later, it does
+    # not fit, and ESPHome silently drops it: it never sets it up or loops it.
+    CORE.component_ids.add(_group_id(group))
 
     if platform == "bp5758d":
         if inner[CONF_CURRENT] < 1:
@@ -149,10 +159,10 @@ async def _group_for(platform, inner, inner_var, hub, key):
 
     # The generated pointers are globals, so a capture-less lambda reaches them.
     apply = cg.RawExpression(f"[](uint8_t i) {{ {setter}; }}")
-    group_id = ID(f"dynamic_range_{key}", is_declaration=True, type=CurrentGroup)
+    group_id = ID(_group_id(key), is_declaration=True, type=CurrentGroup)
     groups[key] = cg.new_Pvariable(group_id, min_index, max_index, offset, apply)
-    # A component, for its loop(): it steps the current gradually.
-    CORE.component_ids.add(group_id.id)
+    # A component, for its loop(): it steps the current gradually. Already
+    # counted in CORE.component_ids by _final_validate.
     await cg.register_component(groups[key], {})
     return groups[key]
 

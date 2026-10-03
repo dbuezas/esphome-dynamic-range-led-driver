@@ -1,6 +1,7 @@
 #include "dynamic_range.h"
 #include <algorithm>
 #include "esphome/core/helpers.h"
+#include "esphome/core/log.h"
 
 namespace esphome::dynamic_range {
 
@@ -9,6 +10,8 @@ namespace esphome::dynamic_range {
 // its coarse bottom end.
 static const float TARGET_LEVEL = 0.5f;
 
+static const char *const TAG = "dynamic_range";
+
 static bool enabled_ = true;
 static std::vector<CurrentGroup *> &all_groups() {
   static std::vector<CurrentGroup *> groups;
@@ -16,6 +19,7 @@ static std::vector<CurrentGroup *> &all_groups() {
 }
 
 void set_enabled(bool enabled) {
+  ESP_LOGD(TAG, "%s", enabled ? "Enabled" : "Disabled (fixed current)");
   enabled_ = enabled;
   for (auto *g : all_groups())
     g->update();
@@ -72,8 +76,10 @@ void CurrentGroup::update() {
     this->index_ = this->target_;  // nothing was lit, so a jump cannot show
 
   this->write_();
-  if (this->index_ != this->target_)
+  if (this->index_ != this->target_) {
+    ESP_LOGV(TAG, "Current %u -> %u", this->index_, this->target_);
     this->enable_loop();
+  }
 }
 
 void CurrentGroup::loop() {
@@ -83,6 +89,8 @@ void CurrentGroup::loop() {
   }
   this->index_ += this->target_ > this->index_ ? 1 : -1;
   this->write_();
+  if (this->index_ == this->target_)
+    ESP_LOGV(TAG, "Current reached %u", this->index_);
 }
 
 void CurrentGroup::write_() {
