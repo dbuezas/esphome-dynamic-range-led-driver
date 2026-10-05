@@ -1,7 +1,7 @@
 # esphome-dynamic-range-led-driver
 
-For ESPHome bulbs with one of these LED driver chips: **BP5758D, BP1658CJ,
-SM2235, SM2335, SM2135**. It gives you two things:
+For ESPHome bulbs with one of these LED driver chips: **BP5758D, BP5768,
+BP1658CJ, SM2235, SM2335, SM2135**. It gives you two things:
 
 - **A much lower minimum brightness.** On a BP5758D bulb with `current: 16`,
   the lowest setting is 16 times dimmer than with ESPHome alone. On my
@@ -120,6 +120,9 @@ switch:
 
 - **BP5758D:** the same logic has run on two bulbs since 2022. The test
   checks that this component gives the same output as that code.
+- **BP5768:** works on a GY G150 23 W bulb (two BP5768, BK7231N). Use the
+  `bp5758d` platform: the BP5768 speaks the BP5758D protocol, and
+  `dynamic_range` treats it the same way.
 - **BP1658CJ, SM2235, SM2335, SM2135:** compiled and simulated only. If you
   have one of these bulbs, please open an issue and say if it works.
 
