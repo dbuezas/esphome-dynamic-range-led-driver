@@ -20,7 +20,7 @@ static const uint32_t DITHER_FRAME_US = 1000;
 // Above this many codes one code is under 0.4 %: not visible, not worth the CPU.
 static const float DITHER_BELOW = 256.0f;
 // The pattern may not repeat slower than this, see set_min_flicker_hz()...
-static float min_flicker_hz_ = 40.0f;
+static float min_flicker_hz_ = 50.0f;
 // ...unless its ripple is this small compared with the brightness.
 static const float MAX_SLOW_RIPPLE = 0.01f;
 
@@ -169,8 +169,10 @@ void DitherOutput::frame_(uint32_t frames) {
     this->sent_ = static_cast<int16_t>(std::lround(code));
   }
   // Book what the last frames gave, then pick the code that brings the owed
-  // light closest to zero over the next frame.
-  this->error_ = clamp(this->error_ + (code - this->sent_) * frames, -2.0f, 2.0f);
+  // light closest to zero over the next frame. Capped at what about one frame
+  // can owe, so a long gap does not wind it up.
+  const float cap = this->frames_per_frame_ + 1.0f;
+  this->error_ = clamp(this->error_ + (code - this->sent_) * frames, -cap, cap);
   this->sent_ = this->error_ + code - low >= 0.5f ? low + 1 : low;
   // A full write from the driver since the last direct write sent the
   // driver's copy instead (the nearest code, at least 1): write again.

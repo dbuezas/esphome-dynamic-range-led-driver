@@ -28,7 +28,7 @@ void bp5758d_resend(bp5758d::BP5758D *chip);
 void set_enabled(bool enabled);
 bool is_enabled();
 
-// The slowest a dithering pattern may repeat (default 40 Hz). Higher: less
+// The slowest a dithering pattern may repeat (default 50 Hz). Higher: less
 // risk of visible flicker, but less dithering (more levels rounded, and a
 // higher lowest level). Lower: the other way round. Re-applies at once.
 void set_min_flicker_hz(float hz);
@@ -48,10 +48,11 @@ void set_min_flicker_hz(float hz);
 // start address in its first byte), and puts the same code in the driver's
 // copy, so a full write from the driver sends it too. Dithering only runs
 // below DITHER_BELOW codes, where a code is a visible step. When the pattern
-// would repeat slower than set_min_flicker_hz(), which could be seen, the level is
-// rounded to the nearest code instead. Below the smallest share that repeats
-// fast enough, a channel that is on stays at that share instead of going off:
-// in a colour, one channel going dark first would change the colour.
+// would repeat slower than set_min_flicker_hz(), which could be seen, the
+// level is rounded to the nearest code instead. Below the smallest share that
+// repeats fast enough, a channel that is on stays at that share instead of
+// going off: in a colour, one channel going dark first would change the
+// colour.
 //
 // Every level is passed on to the driver at once, as without this output, so
 // the driver sends when it would anyway. dynamic_range relies on that: it

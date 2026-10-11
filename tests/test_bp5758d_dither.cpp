@@ -32,7 +32,7 @@ static int failures = 0;
   } while (0)
 
 static const uint32_t FRAME_US = 1000;            // DITHER_FRAME_US
-static const int FRAMES_PER_FLICKER = 1000 / 40;  // frame rate / MIN_FLICKER_HZ
+static const int FRAMES_PER_FLICKER = 1000 / 50;  // frame rate / the default slowest pattern
 
 // The chip: one current for all channels here (enough for these tests), and
 // the driver's "send" flag.
@@ -152,10 +152,10 @@ static Run run_frames(const Model &m, Lamp &l, int n, uint32_t us = FRAME_US) {
 }
 
 // Request s, let the current settle, then average over many frames.
-static Run measure(const Model &m, Lamp &l, float s) {
+static Run measure(const Model &m, Lamp &l, float s, uint32_t us = FRAME_US) {
   l.out->set_level(s);
-  run_frames(m, l, 300);
-  return run_frames(m, l, 4000);
+  run_frames(m, l, 300, us);
+  return run_frames(m, l, 4000, us);
 }
 
 // Dithering off: the output passes every level on unchanged.
@@ -186,8 +186,9 @@ static void test_off_passes_through() {
 
 // Dim end: with dithering the average follows the request far more closely
 // than one code, goes lower, and never flickers slower than allowed. Prints
-// the numbers for the README.
-static void test_dither(const Model &m) {
+// the numbers for the README. us: time between main loop passes (frames).
+static void test_dither(const Model &m, uint32_t us) {
+  const int frames_per_flicker = 1000000 / us / 50;
   reset();
   Lamp l = make_lamp<0>(m);
   // One code at the lowest current, as a fraction of full.
@@ -204,7 +205,7 @@ static void test_dither(const Model &m) {
     // A fine sweep from below one code to 40 codes at the lowest current.
     for (int i = 1; i <= 2000; i++) {
       float s = code_step * 40 * i / 2000;
-      Run run = measure(m, l, s);
+      Run run = measure(m, l, s, us);
       if (run.average > 0)
         r.lowest = std::min<float>(r.lowest, run.average);
       // Jumps from 1 code up: below that, the sweep's own steps are too big.
@@ -215,34 +216,37 @@ static void test_dither(const Model &m) {
         continue;
       // Rounded where the pattern would be too slow: off by at most that share.
       float code = s / code_step, got = run.average / code_step;
-      CHECK(std::fabs(got - code) <= 1.0f / FRAMES_PER_FLICKER + 0.01f, "%s: asked %.3f codes, got %.3f", m.name,
+      CHECK(std::fabs(got - code) <= 1.0f / frames_per_flicker + 0.01f, "%s: asked %.3f codes, got %.3f", m.name,
             code, got);
       // The rule: a slower pattern is fine if its ripple is under 1 %.
       float share = std::min(code - int(code), 1 - (code - int(code)));
       bool small_ripple = 2 * share <= 0.01f * code * 1.001f;
-      CHECK(run.longest <= FRAMES_PER_FLICKER + 1 || run.codes == 1 || small_ripple,
+      CHECK(run.longest <= frames_per_flicker + 1 || run.codes == 1 || small_ripple,
             "%s: %.3f codes held one code for %d frames", m.name, code, run.longest);
       CHECK(run.codes <= 2, "%s: %d codes in one pattern", m.name, run.codes);
     }
   }
-  printf("%-14s lowest: %.5f %% -> %.6f %%   largest jump (1 to 40 codes): %3.0f %% -> %.1f %%\n", m.name,
-         res[0].lowest * 100, res[1].lowest * 100, res[0].worst_jump * 100, res[1].worst_jump * 100);
-  CHECK(res[1].lowest < res[0].lowest / 10, "%s: dithering should go much lower", m.name);
-  CHECK(res[1].worst_jump < res[0].worst_jump / 10, "%s: dithering should be much smoother", m.name);
+  printf("%-14s %4u frames/s   lowest: %.5f %% -> %.6f %%   largest jump (1 to 40 codes): %3.0f %% -> %.1f %%\n",
+         m.name, 1000000 / us, res[0].lowest * 100, res[1].lowest * 100, res[0].worst_jump * 100,
+         res[1].worst_jump * 100);
+  // About frames_per_flicker times lower and smoother.
+  CHECK(res[1].lowest < res[0].lowest / (frames_per_flicker * 0.9f), "%s: dithering should go much lower", m.name);
+  CHECK(res[1].worst_jump < res[0].worst_jump / (frames_per_flicker * 0.7f), "%s: dithering should be much smoother",
+        m.name);
 
   // Few direct writes: about two per pattern, not one per frame.
   direct_writes = 0;
-  measure(m, l, 10.5f * code_step);
+  measure(m, l, 10.5f * code_step, us);
   CHECK(direct_writes <= 4300, "%s: %d direct writes in 4300 frames", m.name, direct_writes);
   direct_writes = 0;
-  measure(m, l, 10.02f * code_step);
+  measure(m, l, 10.02f * code_step, us);
   CHECK(direct_writes < 4300 / 10, "%s: %d direct writes for a rare code", m.name, direct_writes);
 
   // Off, a whole code, or bright: no dithering, the fast loop is released,
   // and the chip shows exactly what the driver holds.
   for (float s : {0.0f, 3 * code_step, 0.8f, 0.5f * code_step}) {
-    measure(m, l, 1.5f * code_step);
-    measure(m, l, s);
+    measure(m, l, 1.5f * code_step, us);
+    measure(m, l, s, us);
     CHECK(esphome::HighFrequencyLoopRequester::num_requests == 0 || s == 0.5f * code_step,
           "%s: fast loop still on at %.6f", m.name, s);
     if (s != 0.5f * code_step)
@@ -426,15 +430,17 @@ static void test_min_flicker_hz() {
       CHECK(std::fabs(run.average / code_step - 0.1f) < 0.005f, "100 Hz, %.3f codes: got %.4f, want 0.1", codes,
             run.average / code_step);
   }
-  bp5758d_dither::set_min_flicker_hz(40);
+  bp5758d_dither::set_min_flicker_hz(50);
   l.out->set_level(0);
   run_frames(m, l, 2);
 }
 
 int main() {
   test_off_passes_through();
-  test_dither({"bp5758d 16 mA", 1, 16, 0});
-  test_dither({"bp5758d 90 mA", 1, 90, 0});
+  // 1000 frames/s: the most it makes. 250: what a BK7231N's main loop gives.
+  test_dither({"bp5758d 16 mA", 1, 16, 0}, 1000);
+  test_dither({"bp5758d 16 mA", 1, 16, 0}, 4000);
+  test_dither({"bp5758d 90 mA", 1, 90, 0}, 4000);
   test_throw_away_level();
   test_dither_slow_loop();
   test_dither_never_off();

@@ -9,6 +9,10 @@ BP1658CJ, SM2235, SM2335, SM2135**. It gives you two things:
 - **Smooth dimming at low brightness**, with many more steps and no visible
   jumps.
 
+The repo also has two smaller components, see below: `bp5758d_dither`
+(temporal dithering, to go even lower on the BP5758D and BP5768) and
+`esp8266_stretch_pwm` (for bulbs dimmed by ESP8266 PWM).
+
 ## Why
 
 Each channel on these chips has two brightness settings:
@@ -122,7 +126,8 @@ switch:
   checks that this component gives the same output as that code.
 - **BP5768:** works on a GY G150 23 W bulb (two BP5768, BK7231N). Use the
   `bp5758d` platform: the BP5768 speaks the BP5758D protocol, and
-  `dynamic_range` treats it the same way.
+  `dynamic_range` treats it the same way. `bp5758d_dither` runs on the same
+  bulb.
 - **BP1658CJ, SM2235, SM2335, SM2135:** compiled and simulated only. If you
   have one of these bulbs, please open an issue and say if it works.
 
@@ -135,9 +140,83 @@ switch:
   group (colour or white) that changed last. ESPHome does this, not this
   component.
 
+## bp5758d_dither (BP5758D and BP5768)
+
+At `dynamic_range`'s lowest current, the level itself goes down to a few
+codes, and each code is a big jump: from 1 to 2 doubles the brightness, and
+below 1 the light is off. `bp5758d_dither` switches fast between two
+neighbouring codes: a wanted 3.4 shows 4 in 40 % of the frames and 3 in the
+others. It uses error diffusion, so the average is exact.
+
+What each layer gives on a BP5758D with `current: 16`, at the dim end:
+
+| | Lowest brightness | Largest jump between neighbouring levels (1 to 40 codes at the lowest current) |
+|---|---|---|
+| ESPHome alone | 0.098 % | 100 % |
+| `dynamic_range` | 0.0061 % (16 times lower) | 100 % |
+| `dynamic_range` + `bp5758d_dither` | 0.0012 % (80 times lower) | 20 % |
+
+These numbers come from `tests/run.sh`, which simulates the chip at 250
+frames per second, what the main loop of a BK7231N gives (see below). With
+`current: 90` the lowest brightness is 0.00022 %. At 1000 frames per
+second it would be 4 times better again. On my G150 lamps the difference is
+visible in slow fades at the very dim end.
+
+It sits between `dynamic_range` and the chip's channel:
+
+```yaml
+external_components:
+  - source: github://dbuezas/esphome-dynamic-range-led-driver
+    components: [dynamic_range, bp5758d_dither]
+
+output:
+  - {platform: bp5758d, id: ch_red, channel: 3, current: 14}
+  - {platform: bp5758d_dither, id: dith_red, output: ch_red}
+  - {platform: dynamic_range, id: out_red, output: dith_red}
+  # ... the same for each channel; the light uses out_red etc.
+
+switch:
+  - platform: template
+    name: Dithering
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    turn_on_action:
+      - lambda: bp5758d_dither::set_enabled(true);
+    turn_off_action:
+      - lambda: bp5758d_dither::set_enabled(false);
+```
+
+Dithering is off until the switch turns it on. Off, the component passes
+every level on unchanged. It also works without `dynamic_range`, on a plain
+`bp5758d` channel. See [`examples/bp5758d_dither.yaml`](examples/bp5758d_dither.yaml).
+
+How it works:
+
+- Each frame writes only that channel's 2 level bytes straight to the chip
+  (3 bytes, about 0.6 ms on a BK7231N), and only if the code changed. The
+  driver itself always sends all 17 bytes, which is too slow for this.
+- The frames come from the main loop, which runs continuously while a
+  channel dithers. At most 1000 frames per second; a BK7231N gets about 250,
+  because its main loop waits for the 2 ms system tick after every pass.
+- Only the level is dithered, never the current, so it cannot flash.
+- Only below 256 codes. Above that, one code is less than 0.4 %.
+- The pattern never repeats slower than 50 times per second, unless its
+  ripple is under 1 %. Where it would, the level is rounded to the nearest
+  code instead. A channel that is on never rounds down to off: it stays at
+  the smallest share that still repeats fast enough (1/5 of a code at 250
+  frames per second). So in a colour, no channel goes dark before the
+  others. `bp5758d_dither::set_min_flicker_hz(hz)` changes the 50: higher
+  is safer against flicker, lower dims deeper. On my lamps I see flicker at
+  the dim end only from the side of my eye, and only well below 50 Hz.
+
+Also, with dithering on or off: the chip sleeps while every level is 0, and
+may lose the first write after it wakes. That shows as a too long black,
+then a too bright start, e.g. when a light changes between colour and white.
+So after a wake, `bp5758d_dither` has the driver send once more.
+
 ## esp8266_stretch_pwm (ESP8266 PWM bulbs)
 
-A second component in this repo, for bulbs without a driver chip, where the
+Another component in this repo, for bulbs without a driver chip, where the
 ESP8266 dims the LEDs with PWM (for example Athom GU10 and 15 W bulbs). It
 replaces ESPHome's `esp8266_pwm` under its own name.
 
@@ -179,7 +258,7 @@ See `examples/esp8266_stretch_pwm.yaml`.
 ## Development
 
 ```sh
-tests/run.sh                          # logic test, needs only a C++ compiler
+tests/run.sh                          # logic tests, need only a C++ compiler
 esphome compile examples/bp5758d.yaml # a real build
 ```
 
