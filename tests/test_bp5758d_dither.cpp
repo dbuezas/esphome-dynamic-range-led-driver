@@ -5,9 +5,6 @@
 //
 // Outputs register themselves and live forever on the device, so the tests
 // allocate them with new and never free them.
-//
-// Built twice by tests/run.sh: frames from each output's loop(), and from the
-// task (DITHER_TASK, as on LibreTiny), here called right after each pass.
 
 #include <cmath>
 #include <cstdio>
@@ -22,12 +19,6 @@ using namespace esphome;
 using bp5758d_dither::DitherOutput;
 using dynamic_range::CurrentGroup;
 using dynamic_range::DynamicRangeOutput;
-
-#ifdef DITHER_TASK
-static const bool TASK = true;
-#else
-static const bool TASK = false;
-#endif
 
 static int failures = 0;
 #define CHECK(cond, ...)                          \
@@ -125,15 +116,10 @@ template<int N> static Lamp make_lamp(const Model &m) {
   return l;
 }
 
-// One main loop pass of these lamps' components, then the driver's. With
-// DITHER_TASK the frames come from the task instead, which runs while the
-// main loop sleeps: here right after the pass.
+// One main loop pass of these lamps' components, then the driver's.
 template<typename... L> static void pass(L &...lamps) {
   ((lamps.group->loop(), lamps.dither->loop()), ...);
   driver_loop();
-#ifdef DITHER_TASK
-  bp5758d_dither::dither_frames();
-#endif
 }
 
 static float shown(const Model &m, const Channel &ch) {
@@ -360,9 +346,8 @@ static void test_dither_never_off() {
 // Two channels on one chip: when the other one changes every pass, the driver
 // sends every channel each time. Its copy holds the dithered code, so the
 // dithering one stays right. The only exception is a dithered 0: the driver
-// holds 1 instead (0 would turn the channel off). Without the task, the
-// driver may send after the frame in a pass, and then the chip shows 1 until
-// the next frame. With the task, the frames always come after the pass.
+// holds 1 instead (0 would turn the channel off). The driver may send after
+// the frame in a pass, and then the chip shows 1 until the next frame.
 static void test_dither_driver_resend() {
   Model m{"bp5758d 16 mA", 1, 16, 0};
   const float code_step = 1.0f / 16 / 1023;
@@ -381,7 +366,7 @@ static void test_dither_driver_resend() {
       sum += a.ch->on_chip;
     }
     double avg = sum / 4000;
-    if (TASK || codes >= 1)
+    if (codes >= 1)
       CHECK(std::fabs(avg - codes) < 0.05, "a should average %.2f codes, got %.3f", codes, avg);
     else
       CHECK(avg >= codes - 0.05 && avg <= 1.0, "a at %.2f codes got %.3f", codes, avg);
@@ -425,8 +410,28 @@ static void test_resend_after_wake() {
   }
 }
 
+// The slowest pattern is adjustable: at 100 Hz no code is held longer than
+// 10 frames, and the lowest level is 1/10 of a code instead of 1/25.
+static void test_min_flicker_hz() {
+  Model m{"bp5758d 16 mA", 1, 16, 0};
+  reset();
+  bp5758d_dither::set_enabled(true);
+  bp5758d_dither::set_min_flicker_hz(100);
+  Lamp l = make_lamp<0>(m);
+  const float code_step = 1.0f / 16 / 1023;
+  for (float codes : {0.001f, 0.15f, 0.5f, 2.3f, 7.95f}) {
+    Run run = measure(m, l, codes * code_step);
+    CHECK(run.longest <= 11 || run.codes == 1, "100 Hz, %.3f codes: held one code for %d frames", codes, run.longest);
+    if (codes < 0.1f)
+      CHECK(std::fabs(run.average / code_step - 0.1f) < 0.005f, "100 Hz, %.3f codes: got %.4f, want 0.1", codes,
+            run.average / code_step);
+  }
+  bp5758d_dither::set_min_flicker_hz(40);
+  l.out->set_level(0);
+  run_frames(m, l, 2);
+}
+
 int main() {
-  printf("frames from %s\n", TASK ? "the task" : "loop()");
   test_off_passes_through();
   test_dither({"bp5758d 16 mA", 1, 16, 0});
   test_dither({"bp5758d 90 mA", 1, 90, 0});
@@ -435,6 +440,7 @@ int main() {
   test_dither_never_off();
   test_dither_driver_resend();
   test_resend_after_wake();
+  test_min_flicker_hz();
   printf(failures ? "%d FAILED\n" : "all passed\n", failures);
   return failures ? 1 : 0;
 }

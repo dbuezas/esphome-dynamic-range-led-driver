@@ -28,10 +28,10 @@ void bp5758d_resend(bp5758d::BP5758D *chip);
 void set_enabled(bool enabled);
 bool is_enabled();
 
-// One dithering frame for every dithering output that has one due. Called by
-// the dithering task (DITHER_TASK), otherwise each output runs its own frames
-// from loop().
-void dither_frames();
+// The slowest a dithering pattern may repeat (default 40 Hz). Higher: less
+// risk of visible flicker, but less dithering (more levels rounded, and a
+// higher lowest level). Lower: the other way round. Re-applies at once.
+void set_min_flicker_hz(float hz);
 
 // Sits between a light (or dynamic_range) and one BP5758D/BP5768 channel.
 //
@@ -48,7 +48,7 @@ void dither_frames();
 // start address in its first byte), and puts the same code in the driver's
 // copy, so a full write from the driver sends it too. Dithering only runs
 // below DITHER_BELOW codes, where a code is a visible step. When the pattern
-// would repeat slower than MIN_FLICKER_HZ, which could be seen, the level is
+// would repeat slower than set_min_flicker_hz(), which could be seen, the level is
 // rounded to the nearest code instead. Below the smallest share that repeats
 // fast enough, a channel that is on stays at that share instead of going off:
 // in a colour, one channel going dark first would change the colour.
@@ -59,13 +59,11 @@ void dither_frames();
 // dithering itself only looks at the level a pass ends with, in its frames,
 // so a throw-away level never reaches the chip by a direct write.
 //
-// On LibreTiny (BK72xx) the main loop waits for the 2 ms system tick after
-// every pass, so it gets about 250 frames per second at best. There the frames
-// come from a task of their own at the lowest priority instead: it only runs
-// while the main loop sleeps, and it holds the scheduler for each frame, so
-// the main loop never runs in the middle of one. The two never touch the chip
-// or the shared state at the same time. Elsewhere the main loop runs
-// continuously while something dithers, and the frames come from loop().
+// The frames come from loop(): while something dithers, the main loop runs
+// continuously instead of at about 60 Hz. On a BK7231N it still waits for the
+// 2 ms system tick after every pass, so it gets about 250 frames per second.
+// The fewer the frames, the less it can dither (the pattern must still repeat
+// fast enough).
 //
 // Also, dithering on or off: the chip sleeps while every level is 0, and may
 // lose the first write after it wakes (Tasmota wakes it with a separate
@@ -95,12 +93,12 @@ class DitherOutput : public output::FloatOutput, public Component {
     this->resend_ = resend;
   }
 
-  // Resend after a wake, and the frames when there is no dithering task.
+  // Resend after a wake, and the dithering frames.
   void loop() override;
 
  protected:
-  friend void dither_frames();
   friend void set_enabled(bool enabled);
+  friend void set_min_flicker_hz(float hz);
 
   void write_state(float state) override;
   // The code to aim for (with a fraction) for a state, whether it is in this

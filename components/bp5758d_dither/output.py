@@ -23,8 +23,7 @@ CONFIG_SCHEMA = (
             cv.Required(CONF_OUTPUT): cv.use_id(output.FloatOutput),
         }
     )
-    # A component, for its loop(): the resend after a wake, and the frames
-    # where there is no dithering task.
+    # A component, for its loop(): the resend after a wake, and the frames.
     .extend(cv.COMPONENT_SCHEMA)
 )
 

@@ -9,13 +9,6 @@
 #define DITHER_CHIP
 #include "esphome/components/bp5758d/bp5758d.h"
 #endif
-// Frames from a task of their own, see DitherOutput. The host test defines
-// DITHER_TASK without a task and calls dither_frames() itself.
-#ifdef USE_LIBRETINY
-#define DITHER_TASK
-#include <FreeRTOS.h>
-#include <task.h>
-#endif
 
 namespace esphome::bp5758d_dither {
 
@@ -26,8 +19,8 @@ static const uint16_t MAX_CODE = 1023;
 static const uint32_t DITHER_FRAME_US = 1000;
 // Above this many codes one code is under 0.4 %: not visible, not worth the CPU.
 static const float DITHER_BELOW = 256.0f;
-// The pattern may not repeat slower than this...
-static const float MIN_FLICKER_HZ = 40.0f;
+// The pattern may not repeat slower than this, see set_min_flicker_hz()...
+static float min_flicker_hz_ = 40.0f;
 // ...unless its ripple is this small compared with the brightness.
 static const float MAX_SLOW_RIPPLE = 0.01f;
 
@@ -60,44 +53,12 @@ void set_enabled(bool enabled) {
 
 bool is_enabled() { return enabled_; }
 
-void dither_frames() {
+void set_min_flicker_hz(float hz) {
+  ESP_LOGD(TAG, "Slowest pattern: %.0f Hz", hz);
+  min_flicker_hz_ = std::max(hz, 1.0f);
   for (auto *o : all_outputs())
-    if (o->dithering_)
-      o->dither_frame_();
+    o->write_state(o->state_);
 }
-
-#ifdef USE_LIBRETINY
-static TaskHandle_t dither_task_ = nullptr;
-
-static void dither_task(void *) {
-  uint32_t last = 0;
-  for (;;) {
-    if (dithering_count_ == 0) {
-      // Nothing to do: sleep until an output starts dithering.
-      ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-      continue;
-    }
-    const uint32_t frame = micros() / DITHER_FRAME_US;
-    if (frame != last) {
-      last = frame;
-      // The main loop must not run in the middle of a frame (see DitherOutput).
-      vTaskSuspendAll();
-      dither_frames();
-      xTaskResumeAll();
-    }
-    // Same priority as the idle task: take turns with it.
-    taskYIELD();
-  }
-}
-
-static void wake_dither_task() {
-  if (dither_task_ == nullptr) {
-    xTaskCreate(dither_task, "dither", 512, nullptr, tskIDLE_PRIORITY, &dither_task_);
-  } else {
-    xTaskNotifyGive(dither_task_);
-  }
-}
-#endif
 
 DitherOutput::DitherOutput() { all_outputs().push_back(this); }
 
@@ -110,7 +71,7 @@ float DitherOutput::target_(float state, bool *ours, bool *dither) const {
   // The smallest share of 1 code whose pattern still repeats fast enough. A
   // channel that is on never goes below it.
   const float frame_hz = 1e6f / (DITHER_FRAME_US * this->frames_per_frame_);
-  const float smallest = MIN_FLICKER_HZ / frame_hz;
+  const float smallest = min_flicker_hz_ / frame_hz;
   const float code = smallest < 0.5f ? std::max(wanted, smallest) : wanted;
   // How fast the pattern repeats: the rarer of the two codes comes once in
   // 1 / share frames. Its ripple is about 2 x share codes.
@@ -168,10 +129,8 @@ void DitherOutput::loop() {
   if (this->dithering_)
     this->log_stats_(now);
 #endif
-#ifndef DITHER_TASK
   if (this->dithering_)
     this->dither_frame_();
-#endif
   (void) now;
 }
 
@@ -227,20 +186,12 @@ void DitherOutput::set_active_(bool active) {
     if (dithering_count_++ == 0)
       stats_.last_pass_us = 0;  // the loop was not watched until now
     this->frame_index_ = micros() / DITHER_FRAME_US;
-#ifdef DITHER_TASK
-#ifdef USE_LIBRETINY
-    wake_dither_task();
-#endif
-#else
-    // Run the main loop continuously instead of at about 60 Hz, so a frame
-    // can go out every DITHER_FRAME_US.
+    // Run the main loop continuously instead of at about 60 Hz, so frames
+    // can go out as often as DITHER_FRAME_US allows.
     this->high_freq_.start();
-#endif
   } else {
     dithering_count_--;
-#ifndef DITHER_TASK
     this->high_freq_.stop();
-#endif
   }
 }
 
