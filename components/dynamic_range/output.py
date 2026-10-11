@@ -76,6 +76,10 @@ def _resolve(full_config, inner_id):
     Returns (platform, inner channel config, hub config or None, group key).
     """
     inner = _find(full_config.get("output", []), inner_id)
+    if inner and inner[CONF_PLATFORM] == "bp5758d_dither":
+        # Dithering in between: the chip's channel is the one behind it.
+        inner_id = inner[CONF_OUTPUT]
+        inner = _find(full_config.get("output", []), inner_id)
     platform = inner[CONF_PLATFORM] if inner else None
     if platform not in SUPPORTED:
         raise cv.Invalid(
@@ -142,14 +146,14 @@ def _final_validate(config):
 FINAL_VALIDATE_SCHEMA = _final_validate
 
 
-async def _group_for(platform, inner, inner_var, hub, key):
+async def _group_for(platform, inner, hub, key):
     groups = CORE.data.setdefault("dynamic_range", {})
     if key in groups:
         return groups[key]
 
     if platform == "bp5758d":
         min_index, max_index, offset = 1, inner[CONF_CURRENT], 0
-        setter = f"{inner_var}->set_current(i)"
+        setter = f"{await cg.get_variable(inner[CONF_ID])}->set_current(i)"
     else:
         hub_key, describe = SHARED[platform]
         hub_var = await cg.get_variable(inner[hub_key])
@@ -175,5 +179,5 @@ async def to_code(config):
     cg.add(var.set_inner(inner_var))
 
     platform, inner, hub, key = _resolve(CORE.config, config[CONF_OUTPUT])
-    group = await _group_for(platform, inner, inner_var, hub, key)
+    group = await _group_for(platform, inner, hub, key)
     cg.add(var.set_group(group))
