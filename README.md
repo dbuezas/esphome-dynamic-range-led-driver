@@ -1,3 +1,5 @@
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/dbuezas)
+
 # esphome-dynamic-range-led-driver
 
 For ESPHome bulbs with one of these LED driver chips: **BP5758D, BP5768,
