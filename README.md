@@ -135,6 +135,45 @@ switch:
   group (colour or white) that changed last. ESPHome does this, not this
   component.
 
+## esp8266_fine_pwm (ESP8266 PWM bulbs)
+
+A second component in this repo, for bulbs without a driver chip, where the
+ESP8266 dims the LEDs with PWM (for example Athom GU10 and 15 W bulbs). It
+replaces ESPHome's `esp8266_pwm` under its own name.
+
+ESPHome's `esp8266_pwm` at 1000 Hz turns the pin on for at least 1 µs per
+1000 µs period, so its lowest brightness is 0.1 %. Many bulbs have a driver
+behind the pin that loses pulses shorter than about 1 µs, so a shorter pulse
+does not help. This component keeps the pulse at `min_pulse` and makes the
+period longer instead. The pulse rate then drops from `frequency` down to
+`min_frequency`, only at the dim end.
+
+| `min_frequency` | Lowest brightness (1 µs pulse) |
+|---|---|
+| 1000 Hz (`esp8266_pwm`) | 0.1 % |
+| 250 Hz (default) | 0.025 % |
+| 40 Hz | 0.004 % |
+
+On my Athom GU10 bulbs, 40 Hz shows no flicker at that dim level, and 25 Hz
+flickers. Steps are CPU cycles (12.5 ns at 80 MHz) instead of whole
+microseconds; set `fine_steps: false` for whole microseconds.
+
+```yaml
+external_components:
+  - source: github://dbuezas/esphome-dynamic-range-led-driver
+    components: [esp8266_fine_pwm]
+
+output:
+  - platform: esp8266_fine_pwm   # was: esp8266_pwm
+    id: warm_white_output
+    pin: GPIO13
+    min_frequency: 40Hz          # default 250Hz
+    # frequency: 1000Hz          # default, as in esp8266_pwm
+    # min_pulse: 1us             # default; the shortest pulse your bulb shows
+```
+
+See `examples/esp8266_fine_pwm.yaml`.
+
 ## Development
 
 ```sh

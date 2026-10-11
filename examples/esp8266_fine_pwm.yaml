@@ -1,5 +1,6 @@
 # Athom GU10 RGBWW bulb (ESP8285) with esp8266_fine_pwm instead of
-# esp8266_pwm: the same, with CPU-cycle steps. Adjust pins to your bulb.
+# esp8266_pwm: below the 1 us minimum pulse, the period gets longer (down to
+# 40 Hz) so the light goes much dimmer. Adjust pins to your bulb.
 esphome:
   name: fine-pwm-bulb
 
@@ -11,11 +12,11 @@ external_components:
     components: [esp8266_fine_pwm]
 
 output:
-  - {platform: esp8266_fine_pwm, id: red_output, pin: GPIO4}
-  - {platform: esp8266_fine_pwm, id: green_output, pin: GPIO12}
-  - {platform: esp8266_fine_pwm, id: blue_output, pin: GPIO14}
-  - {platform: esp8266_fine_pwm, id: warm_white_output, pin: GPIO13}
-  - {platform: esp8266_fine_pwm, id: white_output, pin: GPIO5}
+  - {platform: esp8266_fine_pwm, id: red_output, pin: GPIO4, min_frequency: 40Hz}
+  - {platform: esp8266_fine_pwm, id: green_output, pin: GPIO12, min_frequency: 40Hz}
+  - {platform: esp8266_fine_pwm, id: blue_output, pin: GPIO14, min_frequency: 40Hz}
+  - {platform: esp8266_fine_pwm, id: warm_white_output, pin: GPIO13, min_frequency: 40Hz}
+  - {platform: esp8266_fine_pwm, id: white_output, pin: GPIO5, min_frequency: 40Hz}
 
 light:
   - platform: rgbww
