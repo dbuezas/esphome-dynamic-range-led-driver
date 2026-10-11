@@ -123,7 +123,8 @@ switch:
 ## Tested on
 
 - **BP5758D:** the same logic has run on two bulbs since 2022. The test
-  checks that this component gives the same output as that code.
+  checks that this component gives the same output as that code. `bp5758d_dither`
+  runs on one of them (an 18 W globe, ESP8266).
 - **BP5768:** works on a GY G150 23 W bulb (two BP5768, BK7231N). Use the
   `bp5758d` platform: the BP5768 speaks the BP5758D protocol, and
   `dynamic_range` treats it the same way. `bp5758d_dither` runs on the same
