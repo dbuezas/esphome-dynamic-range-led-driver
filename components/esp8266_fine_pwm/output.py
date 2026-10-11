@@ -45,7 +45,7 @@ CONFIG_SCHEMA = output.FLOAT_OUTPUT_SCHEMA.extend(
         cv.Required(CONF_PIN): cv.All(pins.internal_gpio_output_pin_schema, valid_pwm_pin),
         cv.Optional(CONF_FREQUENCY, default=DEFAULT_FREQUENCY): validate_frequency,
         # The shortest pulse to make; below it the period gets longer instead.
-        cv.Optional(CONF_MIN_PULSE, default="1us"): cv.positive_time_period_microseconds,
+        cv.Optional(CONF_MIN_PULSE, default="1us"): cv.positive_time_period_nanoseconds,
         # How far the period may get longer at the dim end.
         cv.Optional(CONF_MIN_FREQUENCY, default=DEFAULT_MIN_FREQUENCY): validate_frequency,
         # CPU-cycle steps; false rounds to whole microseconds like esp8266_pwm.
@@ -63,7 +63,7 @@ async def to_code(config):
     cg.add(var.set_pin(await cg.gpio_pin_expression(config[CONF_PIN])))
     if config[CONF_FREQUENCY] != DEFAULT_FREQUENCY:
         cg.add(var.set_frequency(config[CONF_FREQUENCY]))
-    min_pulse_us = config[CONF_MIN_PULSE].total_microseconds
+    min_pulse_us = config[CONF_MIN_PULSE].total_nanoseconds / 1000
     if min_pulse_us != DEFAULT_MIN_PULSE_US:
         cg.add(var.set_min_pulse(float(min_pulse_us)))
     if config[CONF_MIN_FREQUENCY] != DEFAULT_MIN_FREQUENCY:
