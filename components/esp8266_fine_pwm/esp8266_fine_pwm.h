@@ -25,6 +25,7 @@ class ESP8266FinePWM final : public output::FloatOutput, public Component {
   void set_frequency(float frequency) { this->frequency_ = frequency; }
   void set_min_pulse(float us) { this->min_pulse_us_ = us; }
   void set_min_frequency(float frequency) { this->min_frequency_ = frequency; }
+  void set_fine_steps(bool fine) { this->fine_steps_ = fine; }
   void update_frequency(float frequency) override {
     this->set_frequency(frequency);
     this->write_state(this->last_output_);
@@ -42,6 +43,7 @@ class ESP8266FinePWM final : public output::FloatOutput, public Component {
   float last_output_{0.0};   // for update_frequency()
   float min_pulse_us_{1.0};     // keep in sync with output.py
   float min_frequency_{250.0};  // keep in sync with output.py
+  bool fine_steps_{true};       // CPU-cycle steps; false: whole microseconds
 };
 
 template<typename... Ts> class SetFrequencyAction final : public Action<Ts...> {

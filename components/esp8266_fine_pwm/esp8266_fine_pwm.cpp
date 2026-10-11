@@ -34,24 +34,32 @@ void HOT ESP8266FinePWM::write_state(float state) {
   this->last_output_ = state;
 
   // As esp8266_pwm, but in CPU cycles: same waveform generator, 80 or 160
-  // times finer steps.
+  // times finer steps. Without fine_steps, rounded to whole microseconds as
+  // esp8266_pwm does (to compare the two ideas separately).
   const float per_us = clockCyclesPerMicrosecond();
-  uint32_t period = static_cast<uint32_t>(roundf(per_us * 1e6f / this->frequency_));
-  uint32_t on = static_cast<uint32_t>(roundf(period * state));
-  const auto min_on = static_cast<uint32_t>(roundf(per_us * this->min_pulse_us_));
-  if (on > 0 && on < min_on) {
+  auto steps = [&](float cycles) -> uint32_t {
+    return this->fine_steps_ ? static_cast<uint32_t>(roundf(cycles))
+                             : static_cast<uint32_t>(roundf(cycles / per_us) * per_us);
+  };
+  uint32_t period = steps(per_us * 1e6f / this->frequency_);
+  const float exact_on = period * state;
+  const uint32_t min_on = steps(per_us * this->min_pulse_us_);
+  uint32_t on;
+  if (exact_on > 0 && exact_on < min_on) {
     // Too short to make: keep the shortest pulse and stretch the period, as
     // far as min_frequency allows. Below that, the nearest of the shortest
     // pulse at the longest period, or off.
-    const auto longest = static_cast<uint32_t>(roundf(per_us * 1e6f / this->min_frequency_));
+    const uint32_t longest = steps(per_us * 1e6f / this->min_frequency_);
     const float stretched = min_on / state;
     if (stretched <= longest) {
       on = min_on;
-      period = static_cast<uint32_t>(roundf(stretched));
+      period = steps(stretched);
     } else {
       on = state * longest >= min_on / 2.0f ? min_on : 0;
       period = longest;
     }
+  } else {
+    on = steps(exact_on);
   }
   uint32_t off = period - on;
   // An inverted pin is high while the light is off. The waveform generator
