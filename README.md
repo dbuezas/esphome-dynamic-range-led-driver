@@ -157,8 +157,8 @@ period longer instead. The pulse rate then drops from `frequency` down to
 On my Athom GU10 bulbs, 40 Hz shows no flicker at that dim level, and 25 Hz
 flickers. Above 0.1 %, it works like `esp8266_pwm` at 1000 Hz.
 
-`fine_steps: true` times the pulse in CPU cycles (12.5 ns at 80 MHz) instead
-of whole microseconds. On my bulbs this made no visible difference.
+Times are in CPU cycles (12.5 ns at 80 MHz), not whole microseconds as in
+`esp8266_pwm`.
 
 ```yaml
 external_components:

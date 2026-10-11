@@ -18,16 +18,14 @@ namespace esphome::esp8266_stretch_pwm {
 // At 1 kHz and 250 Hz that makes the lowest brightness 4 times lower,
 // smoothly; at 40 Hz, 25 times lower.
 //
-// fine_steps: time the pulse in CPU cycles instead of whole microseconds
-// (80000 steps per period at 1 kHz instead of 1000). Off by default: on my
-// bulbs it made no visible difference.
+// Times are in CPU cycles, not rounded to whole microseconds as esp8266_pwm
+// does: 80000 steps per period at 1 kHz instead of 1000.
 class ESP8266StretchPWM final : public output::FloatOutput, public Component {
  public:
   void set_pin(InternalGPIOPin *pin) { this->pin_ = pin; }
   void set_frequency(float frequency) { this->frequency_ = frequency; }
   void set_min_pulse(float us) { this->min_pulse_us_ = us; }
   void set_min_frequency(float frequency) { this->min_frequency_ = frequency; }
-  void set_fine_steps(bool fine) { this->fine_steps_ = fine; }
   void update_frequency(float frequency) override {
     this->set_frequency(frequency);
     this->write_state(this->last_output_);
@@ -45,7 +43,6 @@ class ESP8266StretchPWM final : public output::FloatOutput, public Component {
   float last_output_{0.0};   // for update_frequency()
   float min_pulse_us_{1.0};     // keep in sync with output.py
   float min_frequency_{250.0};  // keep in sync with output.py
-  bool fine_steps_{false};      // keep in sync with output.py; true: CPU-cycle steps
 };
 
 template<typename... Ts> class SetFrequencyAction final : public Action<Ts...> {

@@ -33,13 +33,9 @@ void ESP8266StretchPWM::dump_config() {
 void HOT ESP8266StretchPWM::write_state(float state) {
   this->last_output_ = state;
 
-  // Times in CPU cycles, rounded to whole microseconds as esp8266_pwm does,
-  // or with fine_steps to single cycles (80 or 160 times finer).
+  // Times in CPU cycles: 80 or 160 times finer steps than esp8266_pwm.
   const float per_us = clockCyclesPerMicrosecond();
-  auto steps = [&](float cycles) -> uint32_t {
-    return this->fine_steps_ ? static_cast<uint32_t>(roundf(cycles))
-                             : static_cast<uint32_t>(roundf(cycles / per_us) * per_us);
-  };
+  auto steps = [](float cycles) { return static_cast<uint32_t>(roundf(cycles)); };
   uint32_t period = steps(per_us * 1e6f / this->frequency_);
   const float exact_on = period * state;
   const uint32_t min_on = steps(per_us * this->min_pulse_us_);

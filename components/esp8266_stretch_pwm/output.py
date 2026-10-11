@@ -29,7 +29,6 @@ validate_frequency = cv.All(cv.frequency, cv.float_range(min=1.0e-6))
 DEFAULT_FREQUENCY = 1000.0  # also the C++ default
 CONF_MIN_PULSE = "min_pulse"
 CONF_MIN_FREQUENCY = "min_frequency"
-CONF_FINE_STEPS = "fine_steps"
 DEFAULT_MIN_PULSE_US = 1.0  # also the C++ default
 DEFAULT_MIN_FREQUENCY = 250.0  # also the C++ default
 
@@ -48,8 +47,6 @@ CONFIG_SCHEMA = output.FLOAT_OUTPUT_SCHEMA.extend(
         cv.Optional(CONF_MIN_PULSE, default="1us"): cv.positive_time_period_nanoseconds,
         # How far the period may get longer at the dim end.
         cv.Optional(CONF_MIN_FREQUENCY, default=DEFAULT_MIN_FREQUENCY): validate_frequency,
-        # CPU-cycle steps instead of whole microseconds like esp8266_pwm.
-        cv.Optional(CONF_FINE_STEPS, default=False): cv.boolean,
     }
 ).extend(cv.COMPONENT_SCHEMA)
 CONFIG_SCHEMA = cv.All(CONFIG_SCHEMA, _min_frequency_below_frequency)
@@ -68,8 +65,6 @@ async def to_code(config):
         cg.add(var.set_min_pulse(float(min_pulse_us)))
     if config[CONF_MIN_FREQUENCY] != DEFAULT_MIN_FREQUENCY:
         cg.add(var.set_min_frequency(config[CONF_MIN_FREQUENCY]))
-    if config[CONF_FINE_STEPS]:
-        cg.add(var.set_fine_steps(True))
 
 
 @automation.register_action(
