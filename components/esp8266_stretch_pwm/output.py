@@ -1,8 +1,8 @@
-"""ESPHome's esp8266_pwm, with CPU-cycle instead of microsecond steps.
+"""ESPHome's esp8266_pwm, with a stretched period at the dim end.
 
 A drop-in replacement under its own name: change `platform: esp8266_pwm` to
-`platform: esp8266_fine_pwm`. Same options, plus min_pulse and min_frequency
-for the dim end (see esp8266_fine_pwm.h).
+`platform: esp8266_stretch_pwm`. Same options, plus min_pulse and min_frequency
+for the dim end (see esp8266_stretch_pwm.h).
 """
 
 from esphome import automation, pins
@@ -21,8 +21,8 @@ def valid_pwm_pin(value):
     return value
 
 
-ns = cg.esphome_ns.namespace("esp8266_fine_pwm")
-ESP8266FinePWM = ns.class_("ESP8266FinePWM", output.FloatOutput, cg.Component)
+ns = cg.esphome_ns.namespace("esp8266_stretch_pwm")
+ESP8266StretchPWM = ns.class_("ESP8266StretchPWM", output.FloatOutput, cg.Component)
 SetFrequencyAction = ns.class_("SetFrequencyAction", automation.Action)
 validate_frequency = cv.All(cv.frequency, cv.float_range(min=1.0e-6))
 
@@ -41,15 +41,15 @@ def _min_frequency_below_frequency(config):
 
 CONFIG_SCHEMA = output.FLOAT_OUTPUT_SCHEMA.extend(
     {
-        cv.Required(CONF_ID): cv.declare_id(ESP8266FinePWM),
+        cv.Required(CONF_ID): cv.declare_id(ESP8266StretchPWM),
         cv.Required(CONF_PIN): cv.All(pins.internal_gpio_output_pin_schema, valid_pwm_pin),
         cv.Optional(CONF_FREQUENCY, default=DEFAULT_FREQUENCY): validate_frequency,
         # The shortest pulse to make; below it the period gets longer instead.
         cv.Optional(CONF_MIN_PULSE, default="1us"): cv.positive_time_period_nanoseconds,
         # How far the period may get longer at the dim end.
         cv.Optional(CONF_MIN_FREQUENCY, default=DEFAULT_MIN_FREQUENCY): validate_frequency,
-        # CPU-cycle steps; false rounds to whole microseconds like esp8266_pwm.
-        cv.Optional(CONF_FINE_STEPS, default=True): cv.boolean,
+        # CPU-cycle steps instead of whole microseconds like esp8266_pwm.
+        cv.Optional(CONF_FINE_STEPS, default=False): cv.boolean,
     }
 ).extend(cv.COMPONENT_SCHEMA)
 CONFIG_SCHEMA = cv.All(CONFIG_SCHEMA, _min_frequency_below_frequency)
@@ -68,16 +68,16 @@ async def to_code(config):
         cg.add(var.set_min_pulse(float(min_pulse_us)))
     if config[CONF_MIN_FREQUENCY] != DEFAULT_MIN_FREQUENCY:
         cg.add(var.set_min_frequency(config[CONF_MIN_FREQUENCY]))
-    if not config[CONF_FINE_STEPS]:
-        cg.add(var.set_fine_steps(False))
+    if config[CONF_FINE_STEPS]:
+        cg.add(var.set_fine_steps(True))
 
 
 @automation.register_action(
-    "output.esp8266_fine_pwm.set_frequency",
+    "output.esp8266_stretch_pwm.set_frequency",
     SetFrequencyAction,
     cv.Schema(
         {
-            cv.Required(CONF_ID): cv.use_id(ESP8266FinePWM),
+            cv.Required(CONF_ID): cv.use_id(ESP8266StretchPWM),
             cv.Required(CONF_FREQUENCY): cv.templatable(validate_frequency),
         }
     ),

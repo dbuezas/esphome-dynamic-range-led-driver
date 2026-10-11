@@ -135,7 +135,7 @@ switch:
   group (colour or white) that changed last. ESPHome does this, not this
   component.
 
-## esp8266_fine_pwm (ESP8266 PWM bulbs)
+## esp8266_stretch_pwm (ESP8266 PWM bulbs)
 
 A second component in this repo, for bulbs without a driver chip, where the
 ESP8266 dims the LEDs with PWM (for example Athom GU10 and 15 W bulbs). It
@@ -155,24 +155,26 @@ period longer instead. The pulse rate then drops from `frequency` down to
 | 40 Hz | 0.004 % |
 
 On my Athom GU10 bulbs, 40 Hz shows no flicker at that dim level, and 25 Hz
-flickers. Steps are CPU cycles (12.5 ns at 80 MHz) instead of whole
-microseconds; set `fine_steps: false` for whole microseconds.
+flickers. Above 0.1 %, it works like `esp8266_pwm` at 1000 Hz.
+
+`fine_steps: true` times the pulse in CPU cycles (12.5 ns at 80 MHz) instead
+of whole microseconds. On my bulbs this made no visible difference.
 
 ```yaml
 external_components:
   - source: github://dbuezas/esphome-dynamic-range-led-driver
-    components: [esp8266_fine_pwm]
+    components: [esp8266_stretch_pwm]
 
 output:
-  - platform: esp8266_fine_pwm   # was: esp8266_pwm
+  - platform: esp8266_stretch_pwm   # was: esp8266_pwm
     id: warm_white_output
     pin: GPIO13
-    min_frequency: 40Hz          # default 250Hz
-    # frequency: 1000Hz          # default, as in esp8266_pwm
-    # min_pulse: 1us             # default; the shortest pulse your bulb shows
+    min_frequency: 40Hz             # default 250Hz
+    # frequency: 1000Hz             # default, as in esp8266_pwm
+    # min_pulse: 1us                # default; the shortest pulse your bulb shows
 ```
 
-See `examples/esp8266_fine_pwm.yaml`.
+See `examples/esp8266_stretch_pwm.yaml`.
 
 ## Development
 

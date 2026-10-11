@@ -1,6 +1,6 @@
 #ifdef USE_ESP8266
 
-#include "esp8266_fine_pwm.h"
+#include "esp8266_stretch_pwm.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 #include "esphome/core/macros.h"
@@ -9,18 +9,18 @@
 
 #include <core_esp8266_waveform.h>
 
-namespace esphome::esp8266_fine_pwm {
+namespace esphome::esp8266_stretch_pwm {
 
-static const char *const TAG = "esp8266_fine_pwm";
+static const char *const TAG = "esp8266_stretch_pwm";
 
-void ESP8266FinePWM::setup() {
+void ESP8266StretchPWM::setup() {
   this->pin_->setup();
   this->turn_off();
 }
 
-void ESP8266FinePWM::dump_config() {
+void ESP8266StretchPWM::dump_config() {
   ESP_LOGCONFIG(TAG,
-                "ESP8266 fine PWM:\n"
+                "ESP8266 stretch PWM:\n"
                 "  Frequency: %.1f Hz (down to %.1f Hz at the dim end)\n"
                 "  Minimum pulse: %.2f us\n"
                 "  Steps per period: %.0f",
@@ -30,12 +30,11 @@ void ESP8266FinePWM::dump_config() {
   LOG_FLOAT_OUTPUT(this);
 }
 
-void HOT ESP8266FinePWM::write_state(float state) {
+void HOT ESP8266StretchPWM::write_state(float state) {
   this->last_output_ = state;
 
-  // As esp8266_pwm, but in CPU cycles: same waveform generator, 80 or 160
-  // times finer steps. Without fine_steps, rounded to whole microseconds as
-  // esp8266_pwm does (to compare the two ideas separately).
+  // Times in CPU cycles, rounded to whole microseconds as esp8266_pwm does,
+  // or with fine_steps to single cycles (80 or 160 times finer).
   const float per_us = clockCyclesPerMicrosecond();
   auto steps = [&](float cycles) -> uint32_t {
     return this->fine_steps_ ? static_cast<uint32_t>(roundf(cycles))
@@ -83,6 +82,6 @@ void HOT ESP8266FinePWM::write_state(float state) {
   }
 }
 
-}  // namespace esphome::esp8266_fine_pwm
+}  // namespace esphome::esp8266_stretch_pwm
 
 #endif
